@@ -2,10 +2,14 @@ use std::{iter::Peekable, str::Chars};
 
 use crate::{State, Token};
 
-/// Must only be called for characters which can begin an identifier.
+/// ## Preconditions
+///
+/// - Must only be called for characters which can begin an identifier.
 pub fn identifier(chars: &mut Peekable<Chars<'_>>, state: &mut State) -> Result<Token, String> {
     let mut idt = String::new();
+
     loop {
+        // Push characters onto idt one by one.
         if let Some(c) = chars.peek() {
             if (*c).is_alphanumeric() || (*c).eq(&'_') {
                 idt.push(*c);
@@ -14,23 +18,24 @@ pub fn identifier(chars: &mut Peekable<Chars<'_>>, state: &mut State) -> Result<
                 break;
             }
         } else {
+            // Was a None.
             return Err(format!("Unterminated identifier on line {}", state.line));
         }
     }
 
     let token = match idt.to_lowercase().as_str() {
-        "const" => Token::CONST,
-        "var" => Token::VAR,
-        "procedure" => Token::PROCEDURE,
-        "call" => Token::CALL,
-        "begin" => Token::BEGIN,
-        "end" => Token::END,
-        "if" => Token::IF,
-        "then" => Token::THEN,
-        "while" => Token::WHILE,
-        "do" => Token::DO,
-        "odd" => Token::ODD,
-        _ => Token::IDENT(idt),
+        "const" => Token::Const,
+        "var" => Token::Var,
+        "procedure" => Token::Procedure,
+        "call" => Token::Call,
+        "begin" => Token::Begin,
+        "end" => Token::End,
+        "if" => Token::If,
+        "then" => Token::Then,
+        "while" => Token::While,
+        "do" => Token::Do,
+        "odd" => Token::Odd,
+        _ => Token::Ident(idt),
     };
 
     Ok(token)
@@ -47,28 +52,30 @@ pub fn number(chars: &mut Peekable<Chars<'_>>, state: &mut State) -> Result<Toke
                 break;
             }
         } else {
+            // Was a None.
             return Err(format!("Unterminated number on line {}", state.line));
         }
     }
 
     if let Ok(res) = num.parse::<i64>() {
-        return Ok(Token::NUMBER(res));
+        Ok(Token::Number(res))
     } else {
-        return Err(format!("Invalid number at line {}", state.line));
+        Err(format!("Invalid number at line {}", state.line))
     }
 }
 
 pub fn assignment(chars: &mut Peekable<Chars<'_>>, state: &mut State) -> Result<Token, String> {
-    chars.next();
+    chars.next(); // Consume the ':' character.
+
     if let Some(c) = chars.peek() {
         if (*c).eq(&'=') {
             chars.next();
-            return Ok(Token::ASSIGN);
+            Ok(Token::Assign)
         } else {
-            return Err(format!("Unknown token on line {}", state.line));
+            Err(format!("Unknown token ':' on line {}", state.line))
         }
     } else {
-        return Err(format!("Unterminated assignment on line {}", state.line));
+        Err(format!("Unterminated assignment on line {}", state.line))
     }
 }
 
@@ -81,7 +88,7 @@ pub fn lex(state: &mut State, file: &str) -> Result<Vec<Token>, String> {
         if let Some(c) = chars.peek() {
             if (*c).eq(&'{') {
                 chars.next(); // Consume the opening brace
-                'comment: while let Some(c) = chars.next() {
+                'comment: for c in chars.by_ref() {
                     if c == '}' {
                         break 'comment;
                     }
@@ -103,19 +110,19 @@ pub fn lex(state: &mut State, file: &str) -> Result<Vec<Token>, String> {
                 tokens.push(token);
             } else {
                 let token = match *c {
-                    '.' => Token::DOT,
-                    '=' => Token::EQUAL,
-                    ',' => Token::COMMA,
-                    ';' => Token::SEMICOLON,
-                    '#' => Token::HASH,
-                    '<' => Token::LESSTHAN,
-                    '>' => Token::GREATERTHAN,
-                    '+' => Token::PLUS,
-                    '-' => Token::MINUS,
-                    '*' => Token::MULTIPLY,
-                    '/' => Token::DIVIDE,
-                    '(' => Token::LPAREN,
-                    ')' => Token::RPAREN,
+                    '.' => Token::Dot,
+                    '=' => Token::Equal,
+                    ',' => Token::Comma,
+                    ';' => Token::Semicolon,
+                    '#' => Token::Hash,
+                    '<' => Token::LessThan,
+                    '>' => Token::GreaterThan,
+                    '+' => Token::Plus,
+                    '-' => Token::Minus,
+                    '*' => Token::Multiply,
+                    '/' => Token::Divide,
+                    '(' => Token::LParen,
+                    ')' => Token::RParen,
                     _ => {
                         return Err(format!("Unknown token on line {}", state.line));
                     }
@@ -128,6 +135,5 @@ pub fn lex(state: &mut State, file: &str) -> Result<Vec<Token>, String> {
         }
     }
 
-    println!("Lexer succeeded.");
     Ok(tokens)
 }

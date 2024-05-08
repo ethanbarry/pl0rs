@@ -2,22 +2,29 @@ use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{Token, Token::*};
 
-pub fn parse(tokens: Vec<Token>) -> Result<String, String> {
-    // Parser state.
-    let mut depth = 0;
+const NESTING_DEPTH: i32 = 0;
 
-    let mut tokens = tokens.into_iter().peekable();
+pub fn parse(tokens: &mut Peekable<IntoIter<Token>>) -> Result<(), String> {
     if let Some(t) = tokens.peek() {
         let mut t = t.to_owned();
-        t = block(&mut tokens, depth)?;
-        expect(DOT, &mut tokens)?;
-        if let Some(tok) = tokens.peek() {
-            eprintln!("Error: expected end of file but found remaining token {tok} after `.`");
+
+        t = block(tokens, NESTING_DEPTH)?; // t should be the last token in the file.
+
+        if t == Dot {
+            tokens.next();
         } else {
-            println!("Parse successful.");
+            return Err("Expected DOT but found end of file.".to_string());
         }
+
+        // Now if tokens follow, we have an error.
+        if let Some(tok) = tokens.peek() {
+            Err("Error: expected end of file but found remaining token {tok} after `.`".to_string())
+        } else {
+            Ok(())
+        }
+    } else {
+        Err("Error: No tokens found - empty file.".to_string())
     }
-    Ok(format!("String return."))
 }
 
 fn block(tokens: &mut Peekable<IntoIter<Token>>, mut depth: i32) -> Result<Token, String> {
@@ -25,216 +32,215 @@ fn block(tokens: &mut Peekable<IntoIter<Token>>, mut depth: i32) -> Result<Token
 
     // Variable nesting depth should be set globally.
     if depth > 2 {
-        return Err(format!("Error: nesting depth exceeded."));
+        return Err("Error: nesting depth exceeded.".to_string());
     }
 
-    while let Some(t) = tokens.peek() {
+    return if let Some(t) = tokens.peek() {
         let mut t = t.to_owned();
-        if t == CONST {
-            expect(CONST, tokens)?;
-            expect(IDENT(String::new()), tokens)?;
-            expect(EQUAL, tokens)?;
-            t = expect_with_ret(NUMBER(0_i64), tokens)?;
-            while t == COMMA {
-                expect(COMMA, tokens)?;
-                expect(IDENT(String::new()), tokens)?;
-                expect(EQUAL, tokens)?;
-                t = expect_with_ret(NUMBER(0_i64), tokens)?;
+        if t == Const {
+            t = expect(Const, tokens)?;
+            t = expect(Ident(String::new()), tokens)?;
+            t = expect(Equal, tokens)?;
+            t = expect(Number(0_i64), tokens)?;
+            while t == Comma {
+                t = expect(Comma, tokens)?;
+                t = expect(Ident(String::new()), tokens)?;
+                t = expect(Equal, tokens)?;
+                t = expect(Number(0_i64), tokens)?;
             }
-            t = expect_with_ret(SEMICOLON, tokens)?;
+            t = expect(Semicolon, tokens)?;
         }
 
-        if t == VAR {
-            expect(VAR, tokens)?;
-            t = expect_with_ret(IDENT(String::new()), tokens)?;
-            while t == COMMA {
-                expect(COMMA, tokens)?;
-                t = expect_with_ret(IDENT(String::new()), tokens)?;
+        if t == Var {
+            t = expect(Var, tokens)?;
+            t = expect(Ident(String::new()), tokens)?;
+            while t == Comma {
+                t = expect(Comma, tokens)?;
+                t = expect(Ident(String::new()), tokens)?;
             }
-            t = expect_with_ret(SEMICOLON, tokens)?;
+            t = expect(Semicolon, tokens)?;
         }
 
-        while t == PROCEDURE {
-            expect(PROCEDURE, tokens)?;
-            expect(IDENT(String::new()), tokens)?;
-            expect(SEMICOLON, tokens)?;
+        while t == Procedure {
+            t = expect(Procedure, tokens)?;
+            t = expect(Ident(String::new()), tokens)?;
+            t = expect(Semicolon, tokens)?;
 
-            block(tokens, depth)?;
+            t = block(tokens, depth)?;
 
-            t = expect_with_ret(SEMICOLON, tokens)?;
+            t = expect(Semicolon, tokens)?;
         }
 
-        (_, t) = statement(tokens, depth)?;
+        t = statement(tokens)?;
 
         depth -= 1;
         if depth < 0 {
-            return Err(format!("Nesting depth {depth} fell below zero"));
+            Err(format!("Nesting depth {depth} fell below zero"))
         } else {
-            return Ok(t);
+            Ok(t)
         }
-    }
-
-    Err(format!("Expected more tokens and found end of file."))
+    } else {
+        Err("Expected more tokens and found end of file.".to_string())
+    };
 }
 
-fn statement(
-    tokens: &mut Peekable<IntoIter<Token>>,
-    mut depth: i32,
-) -> Result<(String, Token), String> {
+fn statement(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
     match tokens.peek() {
         Some(t) => {
             let mut t = t.to_owned();
             match t {
-                IDENT(_) => {
-                    t = expect_with_ret(IDENT(String::new()), tokens)?;
-                    t = expect_with_ret(ASSIGN, tokens)?;
-                    (_, t) = expression(tokens, depth)?;
+                Ident(_) => {
+                    t = expect(Ident(String::new()), tokens)?;
+                    t = expect(Assign, tokens)?;
+                    t = expression(tokens)?;
                 }
-                CALL => {
-                    t = expect_with_ret(CALL, tokens)?;
-                    t = expect_with_ret(IDENT(String::new()), tokens)?;
+                Call => {
+                    t = expect(Call, tokens)?;
+                    t = expect(Ident(String::new()), tokens)?;
                 }
-                BEGIN => {
-                    t = expect_with_ret(BEGIN, tokens)?;
-                    (_, t) = statement(tokens, depth)?;
-                    while t == SEMICOLON {
-                        t = expect_with_ret(SEMICOLON, tokens)?;
-                        (_, t) = statement(tokens, depth)?;
+                Begin => {
+                    t = expect(Begin, tokens)?;
+                    t = statement(tokens)?;
+                    while t == Semicolon {
+                        t = expect(Semicolon, tokens)?;
+                        t = statement(tokens)?;
                     }
-                    t = expect_with_ret(END, tokens)?;
+                    t = expect(End, tokens)?;
                 }
-                IF => {
-                    t = expect_with_ret(IF, tokens)?;
-                    (_, t) = condition(tokens, depth)?;
-                    t = expect_with_ret(THEN, tokens)?;
-                    (_, t) = statement(tokens, depth)?;
+                If => {
+                    t = expect(If, tokens)?;
+                    t = condition(tokens)?;
+                    t = expect(Then, tokens)?;
+                    t = statement(tokens)?;
                 }
-                WHILE => {
-                    t = expect_with_ret(WHILE, tokens)?;
-                    (_, t) = condition(tokens, depth)?;
-                    t = expect_with_ret(DO, tokens)?;
-                    (_, t) = statement(tokens, depth)?;
+                While => {
+                    t = expect(While, tokens)?;
+                    t = condition(tokens)?;
+                    t = expect(Do, tokens)?;
+                    t = statement(tokens)?;
                 }
                 _ => {}
             };
 
-            return Ok((format!("String return."), t));
+            Ok(t)
         }
-        None => return Err(format!("Unterminated statement.")),
+        None => Err("Unterminated statement.".to_string()),
     }
 }
 
-fn condition(
-    tokens: &mut Peekable<IntoIter<Token>>,
-    mut depth: i32,
-) -> Result<(String, Token), String> {
+fn condition(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
     if let Some(t) = tokens.peek() {
         let mut t = t.to_owned();
-        if t == ODD {
-            expect(ODD, tokens)?;
-            (_, t) = expression(tokens, depth)?;
+        if t == Odd {
+            t = expect(Odd, tokens)?;
+            t = expression(tokens)?;
         } else {
-            (_, t) = expression(tokens, depth)?;
+            t = expression(tokens)?;
             match t {
-                EQUAL | HASH | LESSTHAN | GREATERTHAN => {
+                Equal | Hash | LessThan | GreaterThan => {
+                    // TODO: Isn't this just expect()?
                     t = if let Some(tok) = tokens.next() {
                         tok
                     } else {
-                        return Err(format!("Expected condition but found end of file."));
+                        return Err("Expected condition but found end of file.".to_string());
                     }
                 }
-                _ => return Err(format!("Syntax error: invalid conditional expression.")),
+                _ => return Err("Syntax error: invalid conditional expression.".to_string()),
             }
 
-            (_, t) = expression(tokens, depth)?;
+            t = expression(tokens)?;
         }
 
-        return Ok((format!("String return"), t));
+        Ok(t)
     } else {
-        return Err(format!("Expected condition, but found end of file."));
+        Err("Expected condition, but found end of file.".to_string())
     }
 }
 
-fn expression(
-    tokens: &mut Peekable<IntoIter<Token>>,
-    mut depth: i32,
-) -> Result<(String, Token), String> {
+fn expression(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
     if let Some(t) = tokens.peek() {
         let mut t = t.to_owned();
 
-        if t == PLUS || t == MINUS {
-            t = expect_with_ret(t, tokens)?;
+        if t == Plus || t == Minus {
+            t = expect(t, tokens)?;
         }
 
-        t = term(tokens, depth)?;
+        t = term(tokens)?;
 
-        while t == PLUS || t == MINUS {
-            t = expect_with_ret(t, tokens)?;
-            t = term(tokens, depth)?;
+        while t == Plus || t == Minus {
+            t = expect(t, tokens)?;
+            t = term(tokens)?;
         }
 
-        Ok((format!("String return"), t))
+        Ok(t)
     } else {
-        return Err(format!("Expected expression but found end of file."));
+        Err("Expected expression but found end of file.".to_string())
     }
 }
 
-fn factor(tokens: &mut Peekable<IntoIter<Token>>, mut depth: i32) -> Result<Token, String> {
+fn factor(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
     if let Some(t) = tokens.peek() {
         let mut t = t.to_owned();
         match t {
-            IDENT(_) => {
-                t = expect_with_ret(IDENT(String::new()), tokens)?;
-                return Ok(t);
+            Ident(_) => {
+                t = expect(Ident(String::new()), tokens)?;
+                Ok(t)
             }
-            NUMBER(_) => {
-                t = expect_with_ret(NUMBER(0_i64), tokens)?;
-                return Ok(t);
+            Number(_) => {
+                t = expect(Number(0_i64), tokens)?;
+                Ok(t)
             }
-            LPAREN => {
-                t = expect_with_ret(LPAREN, tokens)?;
-                expression(tokens, depth)?;
-                t = expect_with_ret(RPAREN, tokens)?;
-                return Ok(t);
+            LParen => {
+                t = expect(LParen, tokens)?;
+                t = expression(tokens)?;
+                t = expect(RParen, tokens)?;
+                Ok(t)
             }
-            _ => return Err(format!("Syntax error: expected factor, found {}", t)),
+            _ => Err("Syntax error: expected factor, found {t}".to_string()),
         }
     } else {
-        return Err(format!("Expected factor but found end of file."));
+        Err("Expected factor but found end of file.".to_string())
     }
 }
 
 // This is a model function that we should use as a template.
-fn term(tokens: &mut Peekable<IntoIter<Token>>, mut depth: i32) -> Result<Token, String> {
-    factor(tokens, depth)?;
-
+fn term(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
     if let Some(t) = tokens.peek() {
         let mut t = t.to_owned();
-        while t == MULTIPLY || t == DIVIDE {
-            t = expect_with_ret(t, tokens)?;
-            factor(tokens, depth)?;
+
+        t = factor(tokens)?;
+
+        while t == Multiply || t == Divide {
+            t = expect(t, tokens)?;
+            t = factor(tokens)?;
         }
         Ok(t)
     } else {
-        return Err(format!(
-            "Syntax error: Expected term but found end of file."
-        ));
+        Err("Syntax error: Expected term but found end of file.".to_string())
     }
 }
 
-fn expect(val: Token, tokens: &mut Peekable<IntoIter<Token>>) -> Result<String, String> {
+fn expect(val: Token, tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
     if let Some(t) = tokens.next() {
         if val != t {
-            return Err(format!("Syntax error: expected {val} but found {t}"));
+            Err(format!("Syntax error: expected {val} but found {t}"))
+        } else {
+            return if let Some(t) = tokens.peek() {
+                Ok(t.clone())
+            } else {
+                Err(format!(
+                    "Syntax error: expected {val} but found end of file."
+                ))
+            };
         }
-        Ok(format!(""))
     } else {
-        return Err(format!(
+        Err(format!(
             "Syntax error: expected {val} but found end of file."
-        ));
+        ))
     }
 }
 
+/*
 fn expect_with_ret(val: Token, tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
     if let Some(t) = tokens.next() {
         let t = t.to_owned();
@@ -255,4 +261,4 @@ fn expect_with_ret(val: Token, tokens: &mut Peekable<IntoIter<Token>>) -> Result
             "Syntax error: expected {val} but found end of file."
         ));
     }
-}
+}*/

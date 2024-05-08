@@ -1,7 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_mut)]
-#![allow(unused_assignments)]
-#![allow(unused_variables)]
 //  * PL/0 Syntax
 //
 //  * pl0rs -- PL/0 compiler.
@@ -60,40 +56,48 @@ enum Commands {
 }
 
 struct State {
-    current_char: char,
     debug: bool,
     line: u32,
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            debug: false,
+            line: 1,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 enum Token {
-    IDENT(String),
-    NUMBER(i64),
-    CONST,
-    VAR,
-    PROCEDURE,
-    CALL,
-    BEGIN,
-    END,
-    IF,
-    THEN,
-    WHILE,
-    DO,
-    ODD,
-    DOT,
-    EQUAL,
-    COMMA,
-    SEMICOLON,
-    ASSIGN,
-    HASH,
-    LESSTHAN,
-    GREATERTHAN,
-    PLUS,
-    MINUS,
-    MULTIPLY,
-    DIVIDE,
-    LPAREN,
-    RPAREN,
+    Ident(String),
+    Number(i64),
+    Const,
+    Var,
+    Procedure,
+    Call,
+    Begin,
+    End,
+    If,
+    Then,
+    While,
+    Do,
+    Odd,
+    Dot,
+    Equal,
+    Comma,
+    Semicolon,
+    Assign,
+    Hash,
+    LessThan,
+    GreaterThan,
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    LParen,
+    RParen,
 }
 
 impl PartialEq for Token {
@@ -109,30 +113,35 @@ impl std::fmt::Display for Token {
     }
 }
 
+/// Can cause program termination with an error code.
 fn read_file(filename: &Path) -> Result<String, String> {
     let path = Path::new(filename);
 
     if !path.extension().unwrap_or_default().eq("pl0") {
-        return Err(String::from("Error: File must have a .pl0 extension"));
+        eprintln!("Error: File must have a .pl0 extension.");
+        exit(1);
     }
 
     let mut file = match File::open(path) {
         Ok(file) => file,
-        Err(why) => return Err(format!("Couldn't open file: {}", why)),
+        Err(e) => return Err(format!("Couldn't open file: {e}")),
     };
 
     let mut contents = String::new();
     match file.read_to_string(&mut contents) {
         Ok(_) => Ok(contents),
-        Err(why) => Err(format!("Couldn't read file: {}", why)),
+        Err(e) => Err(format!("Couldn't read file: {e}")),
     }
 }
 
 fn main() {
     let cli = Cli::parse();
     let mut file = String::new();
+    let mut state = State::default();
 
-    if let Some(file_path) = cli.file.as_deref() {
+    // Open the file and pass it into the file string.
+    // Program can terminate here with an error code.
+    if let Some(file_path) = &cli.file {
         if let Ok(file_string) = read_file(file_path) {
             file = file_string;
         } else {
@@ -141,38 +150,21 @@ fn main() {
         }
     }
 
-    let mut state = State {
-        current_char: ' ',
-        debug: false,
-        line: 1,
-    };
-
-    // You can see how many times a particular flag or argument occurred
-    // Note, only flags can have multiple occurrences
     match cli.debug {
         0 => {
             println!("Debug mode is off");
         }
         1 => {
             println!("Debug mode is on");
-            state = State {
-                current_char: ' ',
-                debug: true,
-                line: 1,
-            }
+            state.debug = true;
         }
         _ => {
             println!("Don't be crazy. Defaulting to debug mode on");
-            state = State {
-                current_char: ' ',
-                debug: true,
-                line: 1,
-            }
+            state.debug = true;
         }
     }
 
-    // You can check for the existence of subcommands, and if found use their
-    // matches just as you would the top level cmd
+    // Not actually used at the moment...
     match &cli.command {
         Some(Commands::Test { list }) => {
             if *list {
@@ -184,13 +176,26 @@ fn main() {
         None => {}
     }
 
+    // Call the other modules.
     match lexer::lex(&mut state, &file) {
-        Ok(res) => match parser::parse(res) {
-            Ok(s) => println!("{s}\nProgram complete."),
-            Err(e) => eprintln!("{e}"),
-        },
+        Ok(res) => {
+            println!("Lexer succeeded.");
+            match parser::parse(&mut res.into_iter().peekable()) {
+                Ok(_) => {
+                    println!("Parser succeeded.");
+                    exit(0);
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    exit(1)
+                } // A returned syntax error.
+            }
+        }
         Err(e) => {
-            eprintln!("{e}");
+            {
+                eprintln!("{e}");
+                exit(1);
+            } // A returned lexer error.
         }
     }
 }
