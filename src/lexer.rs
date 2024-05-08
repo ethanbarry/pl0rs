@@ -52,7 +52,6 @@ pub fn number(chars: &mut Peekable<Chars<'_>>, state: &mut State) -> Result<Toke
     }
 
     if let Ok(res) = num.parse::<i64>() {
-        println!("Returning {}", &res);
         return Ok(Token::NUMBER(res));
     } else {
         return Err(format!("Invalid number at line {}", state.line));
@@ -63,6 +62,7 @@ pub fn assignment(chars: &mut Peekable<Chars<'_>>, state: &mut State) -> Result<
     chars.next();
     if let Some(c) = chars.peek() {
         if (*c).eq(&'=') {
+            chars.next();
             return Ok(Token::ASSIGN);
         } else {
             return Err(format!("Unknown token on line {}", state.line));
@@ -72,7 +72,7 @@ pub fn assignment(chars: &mut Peekable<Chars<'_>>, state: &mut State) -> Result<
     }
 }
 
-pub fn lex(state: &mut State, file: &str) -> Result<String, String> {
+pub fn lex(state: &mut State, file: &str) -> Result<Vec<Token>, String> {
     let mut chars = file.chars().peekable();
     let mut comment = String::new();
     let mut tokens: Vec<Token> = vec![];
@@ -128,8 +128,6 @@ pub fn lex(state: &mut State, file: &str) -> Result<String, String> {
         }
     }
 
-    dbg!(tokens);
-
-    // Do something with the comment string (if needed)
-    Ok(comment)
+    println!("Lexer succeeded.");
+    Ok(tokens)
 }

@@ -11,26 +11,28 @@
 //  *		  [ "var" ident { "," ident } ";" ]
 //  *		  { "procedure" ident ";" block ";" } statement .
 //  * statement	= [ ident ":=" expression
-//  *		  | "call" ident
-//  *		  | "begin" statement { ";" statement } "end"
-//  *		  | "if" condition "then" statement
-//  *		  | "while" condition "do" statement ] .
+//  *		      | "call" ident
+//  *		      | "begin" statement { ";" statement } "end"
+//  *		      | "if" condition "then" statement
+//  *		      | "while" condition "do" statement ] .
 //  * condition	= "odd" expression
-//  *		| expression ( "=" | "#" | "<" | ">" ) expression .
+//  *		      | expression ( "=" | "#" | "<" | ">" ) expression .
 //  * expression	= [ "+" | "-" ] term { ( "+" | "-" ) term } .
 //  * term		= factor { ( "*" | "/" ) factor } .
-//  * factor	= ident
-//  *		| number
-//  *		| "(" expression ")" .
+//  * factor	=   ident
+//  *		      | number
+//  *		      | "(" expression ")" .
 
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::exit;
 
 use clap::{Parser, Subcommand};
 
 mod lexer;
+mod parser;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -63,7 +65,7 @@ struct State {
     line: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Token {
     IDENT(String),
     NUMBER(i64),
@@ -94,6 +96,19 @@ enum Token {
     RPAREN,
 }
 
+impl PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+}
+
+impl std::fmt::Display for Token {
+    // We need a better printer for these, I think, but this is good enough.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 fn read_file(filename: &Path) -> Result<String, String> {
     let path = Path::new(filename);
 
@@ -120,6 +135,9 @@ fn main() {
     if let Some(file_path) = cli.file.as_deref() {
         if let Ok(file_string) = read_file(file_path) {
             file = file_string;
+        } else {
+            eprintln!("Error: No such file found.");
+            exit(1);
         }
     }
 
@@ -166,9 +184,13 @@ fn main() {
         None => {}
     }
 
-    let res = lexer::lex(&mut state, &file);
-    if let Err(s) = res {
-        println!("{s}");
+    match lexer::lex(&mut state, &file) {
+        Ok(res) => match parser::parse(res) {
+            Ok(s) => println!("{s}\nProgram complete."),
+            Err(e) => eprintln!("{e}"),
+        },
+        Err(e) => {
+            eprintln!("{e}");
+        }
     }
-    // Continued program logic goes here...
 }
