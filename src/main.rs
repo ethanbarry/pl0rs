@@ -1,3 +1,7 @@
+#![allow(dead_code)]
+#![allow(unused_mut)]
+#![allow(unused_assignments)]
+#![allow(unused_variables)]
 //  * PL/0 Syntax
 //
 //  * pl0rs -- PL/0 compiler.
@@ -19,16 +23,12 @@
 //  *		      | number
 //  *		      | "(" expression ")" .
 
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
 
 use clap::{Parser, Subcommand};
 
-mod lexer;
-mod parser;
+use pl0rs::{self, lexer::lex, parser::parse, read_file};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -55,89 +55,10 @@ enum Commands {
     },
 }
 
-struct State {
-    debug: bool,
-    line: u32,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            debug: false,
-            line: 1,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum Token {
-    Ident(String),
-    Number(i64),
-    Const,
-    Var,
-    Procedure,
-    Call,
-    Begin,
-    End,
-    If,
-    Then,
-    While,
-    Do,
-    Odd,
-    Dot,
-    Equal,
-    Comma,
-    Semicolon,
-    Assign,
-    Hash,
-    LessThan,
-    GreaterThan,
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
-    LParen,
-    RParen,
-}
-
-impl PartialEq for Token {
-    fn eq(&self, other: &Self) -> bool {
-        std::mem::discriminant(self) == std::mem::discriminant(other)
-    }
-}
-
-impl std::fmt::Display for Token {
-    // We need a better printer for these, I think, but this is good enough.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-/// Can cause program termination with an error code.
-fn read_file(filename: &Path) -> Result<String, String> {
-    let path = Path::new(filename);
-
-    if !path.extension().unwrap_or_default().eq("pl0") {
-        eprintln!("Error: File must have a .pl0 extension.");
-        exit(1);
-    }
-
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(e) => return Err(format!("Couldn't open file: {e}")),
-    };
-
-    let mut contents = String::new();
-    match file.read_to_string(&mut contents) {
-        Ok(_) => Ok(contents),
-        Err(e) => Err(format!("Couldn't read file: {e}")),
-    }
-}
-
 fn main() {
     let cli = Cli::parse();
     let mut file = String::new();
-    let mut state = State::default();
+    let mut state = pl0rs::State::default();
 
     // Open the file and pass it into the file string.
     // Program can terminate here with an error code.
@@ -177,10 +98,10 @@ fn main() {
     }
 
     // Call the other modules.
-    match lexer::lex(&mut state, &file) {
+    match lex(&mut state, &file) {
         Ok(res) => {
             println!("Lexer succeeded.");
-            match parser::parse(&mut res.into_iter().peekable()) {
+            match parse(&mut res.into_iter().peekable()) {
                 Ok(_) => {
                     println!("Parser succeeded.");
                     exit(0);

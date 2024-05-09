@@ -1,5 +1,5 @@
 [package]
-name = "pl-zero-rs"
+name = "pl0rs"
 version = "0.1.0"
 edition = "2021"
 
