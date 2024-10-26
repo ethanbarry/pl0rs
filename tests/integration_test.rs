@@ -7,7 +7,7 @@ use pl0rs::{lexer::lex, parser::parse, *};
 fn test_parse() {
     for i in 0..11 {
         println!("{:04}", i);
-        assert_eq!(parse_file(format!("{:04}", i).as_str()).unwrap(), ())
+        assert_eq!(parse_file(format!("{:04}", i).as_str()), Ok(()))
     }
 }
 

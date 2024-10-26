@@ -5,8 +5,11 @@
 
 use std::{fs::File, io::Read, path::Path, process::exit};
 
+pub mod codegen;
 pub mod lexer;
 pub mod parser;
+
+pub const COMPILER_VERSION: &str = "0.1.0";
 
 pub struct State {
     pub debug: bool,
@@ -70,6 +73,7 @@ impl std::fmt::Display for Token {
 pub fn read_file(filename: &Path) -> Result<String, String> {
     let path = Path::new(filename);
 
+    // TODO: Eliminate unwrap.
     if !path.extension().unwrap_or_default().eq("pl0") {
         eprintln!("Error: File must have a .pl0 extension.");
         exit(1);

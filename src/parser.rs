@@ -1,14 +1,19 @@
 use std::{iter::Peekable, vec::IntoIter};
 
-use crate::{Token, Token::*};
+use crate::{
+    codegen::{self, *},
+    Token::{self, *},
+};
 
 const NESTING_DEPTH: i32 = 0;
 
 pub fn parse(tokens: &mut Peekable<IntoIter<Token>>) -> Result<(), String> {
+    let mut buf = String::new();
+
     if let Some(t) = tokens.peek() {
         let mut t = t.to_owned();
 
-        t = block(tokens, NESTING_DEPTH)?; // t should be the last token in the file.
+        t = block(tokens, NESTING_DEPTH, &buf)?; // t should be the last token in the file.
 
         if t == Dot {
             tokens.next();
@@ -20,6 +25,8 @@ pub fn parse(tokens: &mut Peekable<IntoIter<Token>>) -> Result<(), String> {
         if let Some(tok) = tokens.peek() {
             Err("Error: expected end of file but found remaining token {tok} after `.`".to_string())
         } else {
+            codegen::c_end(&buf);
+            println!("{}", buf);
             Ok(())
         }
     } else {
@@ -27,7 +34,11 @@ pub fn parse(tokens: &mut Peekable<IntoIter<Token>>) -> Result<(), String> {
     }
 }
 
-fn block(tokens: &mut Peekable<IntoIter<Token>>, mut depth: i32) -> Result<Token, String> {
+fn block(
+    tokens: &mut Peekable<IntoIter<Token>>,
+    mut depth: i32,
+    mut buf: &str,
+) -> Result<Token, String> {
     depth += 1;
 
     // Variable nesting depth should be set globally.
@@ -39,6 +50,9 @@ fn block(tokens: &mut Peekable<IntoIter<Token>>, mut depth: i32) -> Result<Token
         let mut t = t.to_owned();
         if t == Const {
             t = expect(Const, tokens)?;
+            if t == Ident("".to_string()) {
+                c_const(t, buf);
+            }
             t = expect(Ident(String::new()), tokens)?;
             t = expect(Equal, tokens)?;
             t = expect(Number(0_i64), tokens)?;
@@ -66,7 +80,7 @@ fn block(tokens: &mut Peekable<IntoIter<Token>>, mut depth: i32) -> Result<Token
             t = expect(Ident(String::new()), tokens)?;
             t = expect(Semicolon, tokens)?;
 
-            t = block(tokens, depth)?;
+            t = block(tokens, depth, buf)?;
 
             t = expect(Semicolon, tokens)?;
         }

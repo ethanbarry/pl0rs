@@ -28,7 +28,7 @@ use std::process::exit;
 
 use clap::{Parser, Subcommand};
 
-use pl0rs::{self, lexer::lex, parser::parse, read_file};
+use pl0rs::{self, lexer::lex, parser::parse, read_file, COMPILER_VERSION};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -60,6 +60,10 @@ fn main() {
     let mut file = String::new();
     let mut state = pl0rs::State::default();
 
+    // Print compiler version, &c.
+    println!("pl0rs -- PL/0 Compiler version {}", COMPILER_VERSION);
+    println!("(c) Ethan Barry, 2024. GPLv3 licensed.");
+
     // Open the file and pass it into the file string.
     // Program can terminate here with an error code.
     if let Some(file_path) = &cli.file {
@@ -73,14 +77,14 @@ fn main() {
 
     match cli.debug {
         0 => {
-            println!("Debug mode is off");
+            println!("Debug mode is off.");
         }
         1 => {
-            println!("Debug mode is on");
+            println!("Debug mode is on.");
             state.debug = true;
         }
         _ => {
-            println!("Don't be crazy. Defaulting to debug mode on");
+            println!("Don't be crazy. Defaulting to debug mode on.");
             state.debug = true;
         }
     }
